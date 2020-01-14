@@ -1,0 +1,18 @@
+<launch>
+    <node pkg="my_ekf" type="my_ekf" name="my_ekf" output="screen">
+    </node>
+  <param name="robot_description" command="$(find xacro)/xacro --inorder $(find turtlebot3_description)/urdf/turtlebot3_burger.urdf.xacro" />
+
+    <node pkg="robot_state_publisher" type="robot_state_publisher" name="robot_state_publisher">
+        <param name="publish_frequency" type="double" value="35.0" />
+    </node>
+
+  <!-- rviz -->
+  <group if="true">
+    <node pkg="rviz" type="rviz" name="rviz" required="true"
+          args="-d $(find my_ekf)/rviz/my_ekf.rviz"/>
+  </group>
+
+
+</launch>
+
