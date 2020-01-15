@@ -154,13 +154,9 @@ void Ekf_Node::spin(const ros::TimerEvent& e)
             delta_hat_pose = odom_diff_model_delta(old_pose, delta_pose);
 
             last_odom_meas_ = noise_odom_ = odom_meas_;
-            // Apply sampled update to noise odom
-            noise_odom_(0) += delta_hat_pose(1) * 
-                    cos(noise_odom_(2) + delta_hat_pose(0));
-            noise_odom_(1) += delta_hat_pose(1) * 
-                    sin(noise_odom_(2) + delta_hat_pose(0));
-            noise_odom_(2) += delta_hat_pose(0) + delta_hat_pose(2);
-
+            // prepare the noise odom data (delta_hat_pose, dx, dy, dtheta)
+            noies_odom_.block<3,1>(0,0) = delta_hat_pose;
+            my_filter->addmeasurement(noise_odom, odom_stamp_);
             cout << noise_odom_ - odom_meas_ << endl;
 
             add_pose_to_path(odom_meas_, odom_path);
@@ -172,7 +168,7 @@ void Ekf_Node::spin(const ros::TimerEvent& e)
 
     if (odom_active_ && !my_filter->is_Initialized) {
         // initialize the state with first odom data 
-        my_filter->state = odom_meas_;
+        my_filter->state = odom_meas_.block<3,1>(0,0);
         my_filter->last_filter_time = odom_stamp_;
         // init last_odom for caculate the delta pose
         last_odom_meas_ = noise_odom_ = odom_meas_;
@@ -184,7 +180,7 @@ void Ekf_Node::spin(const ros::TimerEvent& e)
     if(imu_active_ && !my_filter->imu_Initialized) {        
         tf::transformTFToEigen(base_imu_offset, my_filter->base_imu_offset);
         my_filter->imu_Initialized = true;
-        
+
         // cout << my_filter->base_imu_offset.matrix() << endl;        
         }
 

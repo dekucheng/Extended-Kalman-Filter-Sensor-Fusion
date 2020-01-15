@@ -35,15 +35,22 @@ public:
     bool is_Initialized;
     bool imu_Initialized;
 
-    Matrix<double, 6, 1> state;
+    // filter member variables
+    Vector3d state, prior, K;
+    Vector3d odom_delta, odom_measured_state;
+    Matrix3d Cov, G, R, H_odom, Q_odom;
 
     // since in gazebo simulation there is no such offset... the measurement could
     // be used directly ...
     Affine3d base_imu_offset;
     Matrix4d imu_pose;
 
-    bool update();
+    // Initialization
+    void Init(const Vector3d& first_odom, const ros::Time& first_time_stamp)
+    void addmeasurement(const Matrix<double, 6, 1>& noise_odom, ros::Time odom_stamp);
 
+    bool update();
+    
     // destructor
     virtual ~Ekf_Estimation();
 
@@ -51,6 +58,5 @@ private:
     tf::TransformListener    robot_state;
 
 }; // class
-
 
 #endif
