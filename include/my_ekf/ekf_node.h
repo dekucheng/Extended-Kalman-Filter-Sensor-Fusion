@@ -58,7 +58,7 @@ private:
   void imuCallback(const ImuConstPtr& imu);
 
   // noise odom publisher
-  void add_pose_to_path(const Matrix<double, 6, 1>& meas, nav_msgs::Path& path);
+  void add_pose_to_path(const Vector3d& meas, nav_msgs::Path& path);
 
   void initialize_path();
 

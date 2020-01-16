@@ -36,9 +36,9 @@ public:
     bool imu_Initialized;
 
     // filter member variables
-    Vector3d state, prior, K;
-    Vector3d odom_delta, odom_measured_state;
-    Matrix3d Cov, G, R, H_odom, Q_odom;
+    Vector3d state, prior;
+    Vector3d odom_delta, odom_measured_state, h_u;
+    Matrix3d Cov, G, R, H_odom, Q_odom, K;
 
     // since in gazebo simulation there is no such offset... the measurement could
     // be used directly ...
@@ -46,10 +46,14 @@ public:
     Matrix4d imu_pose;
 
     // Initialization
-    void Init(const Vector3d& first_odom, const ros::Time& first_time_stamp)
-    void addmeasurement(const Matrix<double, 6, 1>& noise_odom, ros::Time odom_stamp);
+    void Init(const Vector3d& first_odom, const ros::Time& first_time_stamp);
+    bool check_time(const ros::Time& t);
+    void addmeasurement(const Matrix<double, 6, 1>& noise_odom);
+    Vector3d get_state() const;
 
-    bool update();
+    void update();
+    void motion_update();
+    void update_odom_matrices();
     
     // destructor
     virtual ~Ekf_Estimation();

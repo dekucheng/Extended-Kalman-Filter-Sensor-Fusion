@@ -36,7 +36,7 @@ Ekf_Node::Ekf_Node():
 
 void Ekf_Node::odomCallback(const OdomConstPtr& msg) 
 {
-    cout << "odom received!" << endl;
+    // cout << "odom received!" << endl;
 
     ROS_DEBUG("Odom callback at time %f ", ros::Time::now().toSec());
     assert(odom_used_);
@@ -95,7 +95,7 @@ void Ekf_Node::odomCallback(const OdomConstPtr& msg)
 void Ekf_Node::imuCallback(const ImuConstPtr& msg)
 {
     // this callback 
-    cout << "imu received!" << endl;
+    // cout << "imu received!" << endl;
 
     // receive data 
     imu_stamp_ = msg->header.stamp;
@@ -114,7 +114,7 @@ void Ekf_Node::imuCallback(const ImuConstPtr& msg)
     }
 
     if (!imu_transform_received) {
-        robot_state.lookupTransform(base_footprint_frame_, "imu_link", imu_stamp_, base_imu_offset);
+        robot_state.lookupTransform(base_footprint_frame_, msg->header.frame_id, imu_stamp_, base_imu_offset);
         imu_transform_received = true;
     }
 
@@ -155,26 +155,27 @@ void Ekf_Node::spin(const ros::TimerEvent& e)
 
             last_odom_meas_ = noise_odom_ = odom_meas_;
             // prepare the noise odom data (delta_hat_pose, dx, dy, dtheta)
-            noies_odom_.block<3,1>(0,0) = delta_hat_pose;
-            my_filter->addmeasurement(noise_odom, odom_stamp_);
-            cout << noise_odom_ - odom_meas_ << endl;
+            noise_odom_.block<3,1>(0,0) = delta_hat_pose;
+            if (my_filter->check_time(odom_stamp_)) {
+              my_filter->addmeasurement(noise_odom_);
 
-            add_pose_to_path(odom_meas_, odom_path);
-            add_pose_to_path(noise_odom_, noise_path);
-            odom_path_pub_.publish(odom_path);
-            noise_odom_path_pub_.publish(noise_path);
+              add_pose_to_path(odom_meas_.block<3,1>(0,0), odom_path);
+              my_filter -> update();
+              Vector3d noise_state = my_filter -> get_state();
+              add_pose_to_path(noise_state, noise_path);
+              odom_path_pub_.publish(odom_path);
+              noise_odom_path_pub_.publish(noise_path);
+            }
+            else {
+              ROS_INFO ("odom too old, not update this time！");
+            }
         }
     }
 
     if (odom_active_ && !my_filter->is_Initialized) {
         // initialize the state with first odom data 
-        my_filter->state = odom_meas_.block<3,1>(0,0);
-        my_filter->last_filter_time = odom_stamp_;
-        // init last_odom for caculate the delta pose
-        last_odom_meas_ = noise_odom_ = odom_meas_;
-
+        my_filter->Init(odom_meas_.block<3,1>(0,0), odom_stamp_);
         initialize_path();
-        my_filter->is_Initialized = true;
     }
 
     if(imu_active_ && !my_filter->imu_Initialized) {        
@@ -202,12 +203,12 @@ void Ekf_Node::spin(const ros::TimerEvent& e)
     // }
 
 
-    cout << "this is timer !!" << endl;
+    // cout << "this is timer !!" << endl;
 
 }
 
 // !!! IMPORTANT renmember to add time stamp here!!!!
-void Ekf_Node::add_pose_to_path(const Matrix<double, 6, 1>& meas, nav_msgs::Path& path) {
+void Ekf_Node::add_pose_to_path(const Vector3d& meas, nav_msgs::Path& path) {
   path.header.seq += 1;
   // MODIFY!!!
   path.header.stamp = ros::Time::now();
@@ -235,8 +236,8 @@ void Ekf_Node::initialize_path() {
   odom_path.header.frame_id = "odom";
 
   noise_path.header = odom_path.header;
-  add_pose_to_path(odom_meas_, odom_path);
-  add_pose_to_path(odom_meas_, noise_path);
+  add_pose_to_path(odom_meas_.block<3,1>(0,0), odom_path);
+  add_pose_to_path(odom_meas_.block<3,1>(0,0), noise_path);
 }
 
 Ekf_Node::~Ekf_Node() {
