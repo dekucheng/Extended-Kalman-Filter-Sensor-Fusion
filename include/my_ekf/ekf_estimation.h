@@ -10,7 +10,7 @@
 #include <signal.h>
 
 #include <memory>
-// #include "ekf_estimation.h"
+#include <unordered_map>
 
 // messages
 #include "nav_msgs/Odometry.h"
@@ -22,6 +22,8 @@
 // eigen3
 #include <eigen3/Eigen/Dense>
 
+#include "my_ekf/utils.h"
+
 using namespace Eigen;
 using namespace std;
 
@@ -32,35 +34,49 @@ public:
     Ekf_Estimation();
 
     ros::Time last_filter_time;
-    bool is_Initialized;
-    bool imu_Initialized;
+    bool is_Initialized, imu_Initialized, landmark_Initialized;
+    bool IF_PRINT;
 
-    // filter member variables
-    Vector3d state, prior;
-    Vector3d odom_delta, odom_measured_state, h_u;
-    Matrix3d Cov, G, R, H_odom, Q_odom, K;
-
-    // since in gazebo simulation there is no such offset... the measurement could
-    // be used directly ...
-    Affine3d base_imu_offset;
-    Matrix4d imu_pose;
 
     // Initialization
     void Init(const Vector3d& first_odom, const ros::Time& first_time_stamp);
+    void Init_imu(const tf::StampedTransform& t);
+    void Init_landmark(const tf::StampedTransform &t);
     bool check_time(const ros::Time& t);
     void addmeasurement(const Matrix<double, 6, 1>& noise_odom);
-    Vector3d get_state() const;
+    void addmeasurement(const double imu_meas);
 
-    void update();
-    void motion_update();
-    void update_odom_matrices();
-    
+    Vector3d get_state() const;
+    bool update(const bool odom_update, const bool imu_update, const ros::Time this_update_time);
     // destructor
     virtual ~Ekf_Estimation();
 
 private:
     tf::TransformListener    robot_state;
 
+    // filter member variables
+    Vector3d state, prior;
+    Matrix3d Cov, G, R;
+    // odom meas matrices
+    Matrix3d H_odom, Q_odom, K_odom;
+    Vector3d odom_meas;
+    // imu meas matrices
+    Matrix<double, 1, 3> H_imu;
+    Vector3d K_imu;
+    Matrix<double, 1, 1> Q_imu;
+    double imu_meas;
+
+    // since in gazebo simulation there is no such offset... the measurement could
+    // be used directly ...
+    Affine3d base_imu_offset, base_camera_offset;
+    Matrix4d imu_pose;
+
+    // apriltag landmark poses
+    unordered_map<int, Matrix4d> known_landmark_poses;
+
+    void motion_update();
+    void update_with_odom();
+    void update_with_imu();
 }; // class
 
 #endif

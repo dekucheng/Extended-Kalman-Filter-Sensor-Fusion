@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<sdf version="1.6">
+  <model name="Tag_2">
+    <static>true</static>
+    <link name="robot_link">
+      <visual name="body_visual">
+        <geometry>
+          <box>
+            <size>1 0.001 1</size>
+          </box>
+	</geometry>
+	<material>
+          <script>
+	    <uri>model://Tag_2/materials/scripts</uri>
+	    <uri>model://Tag_2/materials/textures</uri>
+            <name>RepeatedTextureTag2</name>
+          </script>
+        </material>
+      </visual>
+    </link>
+  </model>
+</sdf>

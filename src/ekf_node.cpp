@@ -7,30 +7,43 @@ Ekf_Node::Ekf_Node():
     private_nh_("~"),
     odom_active_(false),
     imu_active_(false),
+    landmark_active_(false),
     odom_initializing_(false),
     imu_initializing_(false),
     odom_update_(false),
     imu_update_(false)
 {
     double freq;
-    private_nh_.param("spin_rate", freq, 50.0);
+    private_nh_.param("spin_rate", freq, 30.0);
     private_nh_.param("time_out", timeout_, 1.0);
     private_nh_.param("odom_used", odom_used_, true);
     private_nh_.param("imu_used", imu_used_, true);
+    private_nh_.param("landmark_used", landmark_used_, true);
     private_nh_.param("base_footprint_frame", base_footprint_frame_, std::string("base_footprint"));
     private_nh_.param("max_path_plot", max_path_plot, 10000);
-
+    private_nh_.param("camera_optical_frame", camera_optical_frame_,std::string("camera_rgb_optical_frame"));
 
     // publisher
     pose_pub_ = nh_.advertise<geometry_msgs::PoseWithCovarianceStamped>("odom_combined", 10);
     odom_path_pub_ = nh_.advertise<nav_msgs::Path>("odom_path", 10);
     noise_odom_path_pub_ = nh_.advertise<nav_msgs::Path>("noise_odom_path", 10);
 
-    // subscriber
-    odom_sub_ = nh_.subscribe("odom", 10, &Ekf_Node::odomCallback, this);
-    imu_sub_= nh_.subscribe("imu", 10, &Ekf_Node::imuCallback, this);
-    timer_ = nh_.createTimer(ros::Duration(1.0/max(freq, 1.0)), &Ekf_Node::spin, this);
 
+    // subscriber
+    if (odom_used_) {
+      odom_sub_ = nh_.subscribe("odom", 10, &Ekf_Node::odomCallback, this);
+      ROS_INFO("odom used, activate odom subscriber!");
+    }
+    if (imu_used_) {
+      imu_sub_= nh_.subscribe("imu", 10, &Ekf_Node::imuCallback, this);
+      ROS_INFO("imu used, activate imu subscriber!");
+    }
+    if (landmark_used_) {
+      landmark_sub_ = nh_.subscribe("tag_detections", 5, &Ekf_Node::landmarkCallback, this);
+      ROS_INFO("landmark used, activate apriltag subscriber!");
+    }
+
+    timer_ = nh_.createTimer(ros::Duration(1.0/max(freq, 1.0)), &Ekf_Node::spin, this);
     my_filter.reset(new Ekf_Estimation());
 }
 
@@ -44,17 +57,14 @@ void Ekf_Node::odomCallback(const OdomConstPtr& msg)
     // receive data 
     odom_stamp_ = msg->header.stamp;
     odom_time_  = ros::Time::now();
-    cout << "the time difference between stamp and time is : " << odom_time_ - odom_stamp_ << endl;
-        
-    tf::Quaternion q(
-        msg->pose.pose.orientation.x,
-        msg->pose.pose.orientation.y,
-        msg->pose.pose.orientation.z,
-        msg->pose.pose.orientation.w);
 
-    tf::Matrix3x3 m(q);
-    double roll, pitch, yaw;
-    m.getRPY(roll, pitch, yaw);
+    // tf::Pose pose;
+    // tf::poseMsgToTF(msg->pose.pose, pose);
+    // double yaw = tf::getYaw(pose.getRotation());
+    tf::Quaternion q;
+    tf::quaternionMsgToTF(msg->pose.pose.orientation, q);
+    // tf::poseMsgToTF(msg->pose.pose, pose);
+    double yaw = tf::getYaw(q);
 
     odom_meas_(0) = msg->pose.pose.position.x;
     odom_meas_(1) = msg->pose.pose.position.y;
@@ -63,10 +73,10 @@ void Ekf_Node::odomCallback(const OdomConstPtr& msg)
     odom_meas_(4) = msg->twist.twist.linear.y;
     odom_meas_(5) = msg->twist.twist.angular.z;
 
-    // wait to be modified
-    for (unsigned int i=0; i<6; i++)
-      for (unsigned int j=0; j<6; j++)
-        odom_covariance_(i, j) = msg->pose.covariance[6*i+j];
+    // // wait to be modified
+    // for (unsigned int i=0; i<6; i++)
+    //   for (unsigned int j=0; j<6; j++)
+    //     odom_covariance_(i, j) = msg->pose.covariance[6*i+j];
 
     
     // activate odom
@@ -76,7 +86,6 @@ void Ekf_Node::odomCallback(const OdomConstPtr& msg)
       {
         odom_initializing_ = true;
         odom_init_stamp_ = odom_stamp_;
-
         ROS_INFO("Initializing Odom sensor");      
       }
       if ( filter_stamp_ >= odom_init_stamp_)
@@ -99,7 +108,12 @@ void Ekf_Node::imuCallback(const ImuConstPtr& msg)
 
     // receive data 
     imu_stamp_ = msg->header.stamp;
+    imu_time_  = ros::Time::now();
 
+    tf::Quaternion q;
+    tf::quaternionMsgToTF(msg->orientation, q);
+    // tf::poseMsgToTF(msg->pose.pose, pose);
+    imu_meas_ = tf::getYaw(q);
 
     // Transforms imu data to base_footprint frame
     if (!robot_state.waitForTransform(base_footprint_frame_, msg->header.frame_id, imu_stamp_, ros::Duration(0.5))){
@@ -114,11 +128,10 @@ void Ekf_Node::imuCallback(const ImuConstPtr& msg)
     }
 
     if (!imu_transform_received) {
-        robot_state.lookupTransform(base_footprint_frame_, msg->header.frame_id, imu_stamp_, base_imu_offset);
+        robot_state.lookupTransform(base_footprint_frame_, msg->header.frame_id, ros::Time(0), base_imu_offset);
         imu_transform_received = true;
     }
 
-    imu_time_  = ros::Time::now();
     
     // activate imu
     if (!imu_active_) {
@@ -137,13 +150,83 @@ void Ekf_Node::imuCallback(const ImuConstPtr& msg)
     }
 }
 
+void Ekf_Node::landmarkCallback(const LandmarkConstPtr& mark) {
+  // check if this callback is useful
+  if (mark->detections.size() == 0) {
+    landmark_active_ = false;
+  }
+
+  // receive mark mesgs
+  else {
+    landmark_stamp_ = mark->header.stamp;
+    landmark_time_ = ros::Time::now();
+
+    // clear landmark_pose_set
+    landmark_pose_set.clear();
+    // push back tag detections
+    for (int i=0; i<mark->detections.size(); i++) {
+      landmark_pose p;
+      Vector4d trans;
+
+      p.id = mark->detections[i].id[0];
+      trans(0) = mark->detections[i].pose.pose.pose.position.x;
+      trans(1) = mark->detections[i].pose.pose.pose.position.y;
+      trans(2) = mark->detections[i].pose.pose.pose.position.z;
+      trans(3) = 1;
+
+      Eigen::Quaternion<double> q(
+        mark->detections[i].pose.pose.pose.orientation.w,
+        mark->detections[i].pose.pose.pose.orientation.x,
+        mark->detections[i].pose.pose.pose.orientation.y,
+        mark->detections[i].pose.pose.pose.orientation.z
+      );
+      Matrix3d m = q.toRotationMatrix();
+      p.pose.block<3,3>(0,0) = m;
+      p.pose.block<4,1>(0,3) = trans;
+
+      landmark_pose_set.push_back(p);
+
+      // print transform
+      // tf::StampedTransform st;
+      // robot_state.lookupTransform("odom", "tag_0", ros::Time(0), st);
+      // Affine3d transf;
+      // tf::transformTFToEigen(st, transf);
+      // cout << "tag position is: " << endl;
+      // cout << transf.matrix() << endl;
+
+      // cout << "tag position in camera frame is :" << endl;
+      // cout << p.pose << endl;
+    }
+
+
+    if (!landmark_active_) {
+      if (!landmark_initializing_){
+        landmark_initializing_ = true;
+        landmark_init_stamp_ = landmark_stamp_;
+        ROS_INFO("Initializing landmark");      
+      }
+      if ( filter_stamp_ >= landmark_init_stamp_){
+        landmark_active_ = true;
+        landmark_initializing_ = false;
+        ROS_INFO("Landmark activated");      
+      }
+      else ROS_DEBUG("Waiting to activate landmark, because landmark measurements are still %f sec in the future.", 
+        (landmark_init_stamp_ - filter_stamp_).toSec());
+    }
+  }
+}
+
+
+
 void Ekf_Node::spin(const ros::TimerEvent& e)
 {
     ROS_DEBUG("Spin function at time %f", ros::Time::now().toSec());
 
     filter_stamp_ = ros::Time::now();
     if (my_filter->is_Initialized) {
-        if (odom_active_) {
+      ros::Time this_update_time = filter_stamp_;
+        // check if update odom
+        if (odom_active_ && ((odom_stamp_ - my_filter->last_filter_time).toSec() > 0.01)) {
             // calculate the transformation measurement of odom
             Vector3d delta_pose, delta_hat_pose,
                      old_pose(last_odom_meas_(0),last_odom_meas_(1), last_odom_meas_(2));
@@ -153,42 +236,74 @@ void Ekf_Node::spin(const ros::TimerEvent& e)
             // delta_hat_pose = (rot1, trans, rot2)
             delta_hat_pose = odom_diff_model_delta(old_pose, delta_pose);
 
-            last_odom_meas_ = noise_odom_ = odom_meas_;
+            noise_odom_ = odom_meas_;
             // prepare the noise odom data (delta_hat_pose, dx, dy, dtheta)
-            noise_odom_.block<3,1>(0,0) = delta_hat_pose;
-            if (my_filter->check_time(odom_stamp_)) {
-              my_filter->addmeasurement(noise_odom_);
+            noise_odom_(0) = last_odom_meas_(0) + delta_hat_pose(1) * 
+                    cos(last_odom_meas_(2) + delta_hat_pose(0));
+            noise_odom_(1) = last_odom_meas_(1) + delta_hat_pose(1) * 
+                    sin(last_odom_meas_(2) + delta_hat_pose(0));
+            noise_odom_(2) = last_odom_meas_(2) + delta_hat_pose(0) + delta_hat_pose(2);
 
-              add_pose_to_path(odom_meas_.block<3,1>(0,0), odom_path);
-              my_filter -> update();
-              Vector3d noise_state = my_filter -> get_state();
-              add_pose_to_path(noise_state, noise_path);
-              odom_path_pub_.publish(odom_path);
-              noise_odom_path_pub_.publish(noise_path);
-            }
-            else {
-              ROS_INFO ("odom too old, not update this time！");
-            }
+            // add measurement
+            my_filter->addmeasurement(noise_odom_);  
+            // reset last_odom
+            last_odom_meas_ = odom_meas_;
+
+            this_update_time = min(this_update_time, odom_stamp_);
+            odom_update_ = true;
+        }
+        else {
+          odom_update_ = false;
+          ROS_INFO ("odom too old, not update with odom in this callback");
+        }
+        // check if update imu 
+        if (imu_active_ && my_filter->imu_Initialized && ((imu_stamp_ = my_filter->last_filter_time).toSec() > 0.01)) {
+          this_update_time = min(this_update_time, imu_stamp_);  
+          my_filter->addmeasurement(imu_meas_);
+          imu_update_ = true;
+        }
+        else {
+          imu_update_ = false;
+          ROS_INFO("imu data too old, not update with imu in this callback!");
+        }
+  
+        if (my_filter -> update(odom_update_, imu_update_, this_update_time)) {
+            add_pose_to_path(odom_meas_.block<3,1>(0,0), odom_path);
+            Vector3d state = my_filter -> get_state();
+            add_pose_to_path(state, noise_path);
+            odom_path_pub_.publish(odom_path);
+            noise_odom_path_pub_.publish(noise_path);
+            // print out error
+            // double err = sqrt(pow(odom_meas_(0)-state(0), 2) +
+            //                   pow(odom_meas_(1)-state(1), 2) + 
+            //                   pow(odom_meas_(2)-state(2), 2));
+            // cout << "<==============the error is: " << err << endl;
+            // cout << "true odom meas is: " << odom_meas_ << endl;
+        }
+        else {
+          ROS_INFO("EkF filter not update, skip this spin");
         }
     }
 
     if (odom_active_ && !my_filter->is_Initialized) {
         // initialize the state with first odom data 
+        last_odom_meas_ = odom_meas_;
         my_filter->Init(odom_meas_.block<3,1>(0,0), odom_stamp_);
         initialize_path();
     }
 
-    if(imu_active_ && !my_filter->imu_Initialized) {        
-        tf::transformTFToEigen(base_imu_offset, my_filter->base_imu_offset);
-        my_filter->imu_Initialized = true;
-
+    if(imu_active_ && !my_filter->imu_Initialized) {
+        my_filter->Init_imu(base_imu_offset);
         // cout << my_filter->base_imu_offset.matrix() << endl;        
-        }
-
-
-    if (my_filter->is_Initialized) {
-        cout << "filter initialized ! " << endl;
     }
+
+    if (landmark_active_ && !my_filter->landmark_Initialized) {
+      tf::StampedTransform t;
+      robot_state.lookupTransform(base_footprint_frame_, camera_optical_frame_, ros::Time(0), t);
+      my_filter->Init_landmark(t);
+    }
+
+}
 
     // // check which sensors are still active
     // if ((odom_active_ || odom_initializing_) && 
@@ -204,8 +319,6 @@ void Ekf_Node::spin(const ros::TimerEvent& e)
 
 
     // cout << "this is timer !!" << endl;
-
-}
 
 // !!! IMPORTANT renmember to add time stamp here!!!!
 void Ekf_Node::add_pose_to_path(const Vector3d& meas, nav_msgs::Path& path) {

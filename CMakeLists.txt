@@ -16,9 +16,7 @@ find_package(catkin REQUIRED
             geometry_msgs
             sensor_msgs
             message_generation
-	    tf_conversions
-
-	
+	    tf_conversions	
 )
 
 find_package (Eigen3 3.3 REQUIRED NO_MODULE)
@@ -129,7 +127,7 @@ include_directories(
  ${catkin_INCLUDE_DIRS}
 )
 
-add_executable(my_ekf src/ekf_node.cpp src/ekf_estimation.cpp)
+add_executable(my_ekf src/ekf_node.cpp src/ekf_estimation.cpp src/utils.cpp)
 
 
 add_dependencies(my_ekf ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
