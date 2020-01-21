@@ -22,6 +22,11 @@ typedef struct {
   Matrix<double, 6, 1> pose;
 } landmark_pose_euler;
 
+typedef struct {
+  int id;
+  Vector3d pose;
+} base_pose_from_landmark;
+
 
 
 

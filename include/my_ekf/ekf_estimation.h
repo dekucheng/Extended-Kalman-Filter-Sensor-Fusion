@@ -45,9 +45,10 @@ public:
     bool check_time(const ros::Time& t);
     void addmeasurement(const Matrix<double, 6, 1>& noise_odom);
     void addmeasurement(const double imu_meas);
+    void addmeasurement(const vector<landmark_pose>& landmark_pose_set);
 
     Vector3d get_state() const;
-    bool update(const bool odom_update, const bool imu_update, const ros::Time this_update_time);
+    bool update(const bool odom_update, const bool imu_update, const bool landmark_update, const ros::Time this_update_time);
     // destructor
     virtual ~Ekf_Estimation();
 
@@ -73,10 +74,17 @@ private:
 
     // apriltag landmark poses
     unordered_map<int, Matrix4d> known_landmark_poses;
+    Matrix3d H_landmark, Q_landmark, K_landmark;
+    vector<landmark_pose> landmark_pose_measurement;
+    vector<base_pose_from_landmark> landmark_meas;  // for base in odom frame
+
+    // get x y yaw measurement from raw landmark data
+    void getbasefromlandmarkmeas();
 
     void motion_update();
     void update_with_odom();
     void update_with_imu();
+    void update_with_landmark();
 }; // class
 
 #endif

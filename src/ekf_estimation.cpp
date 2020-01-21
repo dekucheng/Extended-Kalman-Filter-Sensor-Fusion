@@ -63,7 +63,6 @@ bool Ekf_Estimation::check_time(const ros::Time& t) {
     }
 }
 void Ekf_Estimation::addmeasurement(const Matrix<double, 6, 1>& noise_odom_){
-
     odom_meas = noise_odom_.block<3,1>(0,0);
 }
 
@@ -71,9 +70,13 @@ void Ekf_Estimation::addmeasurement(const double imu_meas_) {
     imu_meas = imu_meas_;
 }
 
-bool Ekf_Estimation::update(const bool odom_update, const bool imu_update, const ros::Time this_update_time) {
+void Ekf_Estimation::addmeasurement(const vector<landmark_pose>& landmark_pose_set) {
+    landmark_pose_measurement = landmark_pose_set;
+}
+
+bool Ekf_Estimation::update(const bool odom_update, const bool imu_update, const bool landmark_update, const ros::Time this_update_time) {
     // update motion model to get prior
-    if (odom_update || imu_update) {
+    if (odom_update || imu_update || landmark_update) {
         // modify if use dt
         last_filter_time = this_update_time;
         ROS_INFO("ekf ready to update!");
@@ -85,13 +88,14 @@ bool Ekf_Estimation::update(const bool odom_update, const bool imu_update, const
         if (imu_update) {
             update_with_imu();
         }
+        if (landmark_update) {
+            getbasefromlandmarkmeas();
+            update_with_landmark();
+        }
         state = prior;
         return true;
     }
     else return false;
-
-
-
 }
 
 void Ekf_Estimation::update_with_odom() {
@@ -159,12 +163,20 @@ void Ekf_Estimation::update_with_imu() {
 
     // h_u << atan2(dy, dx), sqrt(dx*dx + dy*dy), prior(2)-state(2)-atan2(dy,dx);
 
+void Ekf_Estimation::update_with_landmark() {
+    for (int i=0; i<landmark_meas.size(); i++) {
+        Vector3d h_u(prior(0), prior(1), prior(2));
+        K_landmark = Cov*H_landmark.transpose()*(H_landmark*Cov*H_landmark.transpose() + Q_landmark).inverse();
+        prior = prior + K_landmark*(landmark_meas[i].pose - h_u);
+        Cov = (Matrix3d::Identity() - K_odom*H_odom) * Cov;
+    }
+    cout << " after fuse landmark detections the state is: " << endl;
+    cout << prior << endl;
+}
 
 Vector3d Ekf_Estimation::get_state() const {
     return state;
 }
-
-
 
 void Ekf_Estimation::Init(const Vector3d& first_odom, const ros::Time& first_time_stamp) {
     state = first_odom;
@@ -187,13 +199,22 @@ void Ekf_Estimation::Init(const Vector3d& first_odom, const ros::Time& first_tim
               0, 1, 0,
               0, 0, 1;
 
-    Q_odom <<  0.0001, 0, 0,
-               0,    0.0001, 0,
+    Q_odom <<  0.01, 0, 0,
+               0,    0.01, 0,
                0,    0,      100;
 
     H_imu << 0, 0, 1;
 
     Q_imu << 0.01;
+
+
+    H_landmark << 1, 0, 0,
+              0, 1, 0,
+              0, 0, 1;
+
+    Q_landmark <<  0.01, 0, 0,
+               0,    0.01, 0,
+               0,    0,      0.01;
 
     is_Initialized = true;
 
@@ -218,4 +239,23 @@ void Ekf_Estimation::Init_landmark(const tf::StampedTransform &t) {
     cout << base_camera_offset.matrix() << endl;
 }
 
+void Ekf_Estimation::getbasefromlandmarkmeas() {
+    // convert raw landmark measurement to base foot print pose in odom
+    // clear previous measurement
+    landmark_meas.clear();
+    for (int i=0; i<landmark_pose_measurement.size(); i++) {
+        landmark_pose &lp = landmark_pose_measurement[i];
+        int id = lp.id;
+        Matrix4d tag_pose = known_landmark_poses[id];
+        Matrix4d meas_ = tag_pose * lp.pose.inverse() * base_camera_offset.matrix().inverse();
+
+        double sin = -meas_(0,1), cos = meas_(0,0);
+        base_pose_from_landmark bp;
+        bp.id = id;
+        bp.pose(0) = meas_(0,3);
+        bp.pose(1) = meas_(1,3);
+        bp.pose(2) = atan2(sin, cos);
+        landmark_meas.push_back(bp);
+    }
+}
 

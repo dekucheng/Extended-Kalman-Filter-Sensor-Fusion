@@ -97,8 +97,6 @@ private:
   // landmark measurements
   vector<landmark_pose> landmark_pose_set;
 
-
-
   ros::Time odom_time_, imu_time_, landmark_time_;
   ros::Time odom_stamp_, imu_stamp_, filter_stamp_, landmark_stamp_;
   ros::Time odom_init_stamp_, imu_init_stamp_, landmark_init_stamp_;

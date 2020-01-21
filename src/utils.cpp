@@ -74,14 +74,14 @@ Vector3d odom_diff_model_delta(Vector3d& old_pose, Vector3d& delta_pose)
     // Sample pose differences
     delta_rot1_hat = angle_diff(delta_rot1,
                                 ran_gaussian(alpha1*delta_rot1_noise*delta_rot1_noise +
-                                                alpha2*delta_trans*delta_trans + 0.1));
+                                                alpha2*delta_trans*delta_trans + 0.15));
     delta_trans_hat = delta_trans - 
             ran_gaussian(alpha3*delta_trans*delta_trans +
                             alpha4*delta_rot1_noise*delta_rot1_noise +
-                            alpha4*delta_rot2_noise*delta_rot2_noise + 0.05);
+                            alpha4*delta_rot2_noise*delta_rot2_noise + 0.12);
     delta_rot2_hat = angle_diff(delta_rot2,
                                 ran_gaussian(alpha1*delta_rot2_noise*delta_rot2_noise +
-                                                alpha2*delta_trans*delta_trans + 2));
+                                                alpha2*delta_trans*delta_trans + 0.15));
     std::cout << "noise is ::" << delta_rot1_hat << "  " << delta_trans_hat << "  " << delta_rot2_hat << std::endl;
     Vector3d res(delta_rot1_hat, delta_trans_hat, delta_rot2_hat);
     return res;
@@ -96,4 +96,3 @@ Affine3d create_rotation_matrix(double ax, double ay, double az) {
       Eigen::Affine3d(Eigen::AngleAxisd(az, Eigen::Vector3d(0, 0, 1)));
   return rx * ry * rz;
 }
-

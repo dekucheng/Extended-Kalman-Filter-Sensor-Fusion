@@ -254,7 +254,7 @@ void Ekf_Node::spin(const ros::TimerEvent& e)
         }
         else {
           odom_update_ = false;
-          ROS_INFO ("odom too old, not update with odom in this callback");
+          ROS_INFO ("odom too old, not update with odom in this spin!");
         }
         // check if update imu 
         if (imu_active_ && my_filter->imu_Initialized && ((imu_stamp_ = my_filter->last_filter_time).toSec() > 0.01)) {
@@ -264,20 +264,30 @@ void Ekf_Node::spin(const ros::TimerEvent& e)
         }
         else {
           imu_update_ = false;
-          ROS_INFO("imu data too old, not update with imu in this callback!");
+          ROS_INFO("imu data too old, not update with imu in this spin!");
         }
-  
-        if (my_filter -> update(odom_update_, imu_update_, this_update_time)) {
+        // check if update landmark
+        // check if update imu 
+        if (landmark_active_ && my_filter->landmark_Initialized && ((landmark_stamp_ = my_filter->last_filter_time).toSec() > 0.01)) {
+          this_update_time = min(this_update_time, landmark_stamp_);  
+          my_filter->addmeasurement(landmark_pose_set);
+          landmark_update_ = true;
+        }
+        else {
+          landmark_update_ = false;
+          ROS_INFO("landmark data too old, not update with landmark in this spin!");
+        }
+        if (my_filter -> update(odom_update_, imu_update_, landmark_update_, this_update_time)) {
             add_pose_to_path(odom_meas_.block<3,1>(0,0), odom_path);
             Vector3d state = my_filter -> get_state();
             add_pose_to_path(state, noise_path);
             odom_path_pub_.publish(odom_path);
             noise_odom_path_pub_.publish(noise_path);
             // print out error
-            // double err = sqrt(pow(odom_meas_(0)-state(0), 2) +
-            //                   pow(odom_meas_(1)-state(1), 2) + 
-            //                   pow(odom_meas_(2)-state(2), 2));
-            // cout << "<==============the error is: " << err << endl;
+            double err = sqrt(pow(odom_meas_(0)-state(0), 2) +
+                              pow(odom_meas_(1)-state(1), 2) + 
+                              pow(odom_meas_(2)-state(2), 2));
+            cout << "<==============the error is: " << err << endl;
             // cout << "true odom meas is: " << odom_meas_ << endl;
         }
         else {
@@ -355,7 +365,6 @@ void Ekf_Node::initialize_path() {
 
 Ekf_Node::~Ekf_Node() {
     ROS_INFO("Ekf_Node destructed.");
-
 }
 
 
