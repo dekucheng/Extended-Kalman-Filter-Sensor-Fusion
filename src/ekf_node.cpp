@@ -72,12 +72,6 @@ void Ekf_Node::odomCallback(const OdomConstPtr& msg)
     odom_meas_(3) = msg->twist.twist.linear.x;
     odom_meas_(4) = msg->twist.twist.linear.y;
     odom_meas_(5) = msg->twist.twist.angular.z;
-
-    // // wait to be modified
-    // for (unsigned int i=0; i<6; i++)
-    //   for (unsigned int j=0; j<6; j++)
-    //     odom_covariance_(i, j) = msg->pose.covariance[6*i+j];
-
     
     // activate odom
     if (!odom_active_) 
@@ -103,9 +97,6 @@ void Ekf_Node::odomCallback(const OdomConstPtr& msg)
 
 void Ekf_Node::imuCallback(const ImuConstPtr& msg)
 {
-    // this callback 
-    // cout << "imu received!" << endl;
-
     // receive data 
     imu_stamp_ = msg->header.stamp;
     imu_time_  = ros::Time::now();
@@ -185,17 +176,6 @@ void Ekf_Node::landmarkCallback(const LandmarkConstPtr& mark) {
       p.pose.block<4,1>(0,3) = trans;
 
       landmark_pose_set.push_back(p);
-
-      // print transform
-      // tf::StampedTransform st;
-      // robot_state.lookupTransform("odom", "tag_0", ros::Time(0), st);
-      // Affine3d transf;
-      // tf::transformTFToEigen(st, transf);
-      // cout << "tag position is: " << endl;
-      // cout << transf.matrix() << endl;
-
-      // cout << "tag position in camera frame is :" << endl;
-      // cout << p.pose << endl;
     }
 
 
@@ -236,16 +216,16 @@ void Ekf_Node::spin(const ros::TimerEvent& e)
             // delta_hat_pose = (rot1, trans, rot2)
             delta_hat_pose = odom_diff_model_delta(old_pose, delta_pose);
 
-            noise_odom_ = odom_meas_;
-            // prepare the noise odom data (delta_hat_pose, dx, dy, dtheta)
-            noise_odom_(0) = last_odom_meas_(0) + delta_hat_pose(1) * 
-                    cos(last_odom_meas_(2) + delta_hat_pose(0));
-            noise_odom_(1) = last_odom_meas_(1) + delta_hat_pose(1) * 
-                    sin(last_odom_meas_(2) + delta_hat_pose(0));
-            noise_odom_(2) = last_odom_meas_(2) + delta_hat_pose(0) + delta_hat_pose(2);
+            // noise_odom_ = odom_meas_;
+            // // prepare the noise odom data (delta_hat_pose, dx, dy, dtheta)
+            // noise_odom_(0) = last_odom_meas_(0) + delta_hat_pose(1) * 
+            //         cos(last_odom_meas_(2) + delta_hat_pose(0));
+            // noise_odom_(1) = last_odom_meas_(1) + delta_hat_pose(1) * 
+            //         sin(last_odom_meas_(2) + delta_hat_pose(0));
+            // noise_odom_(2) = last_odom_meas_(2) + delta_hat_pose(0) + delta_hat_pose(2);
 
             // add measurement
-            my_filter->addmeasurement(noise_odom_);  
+            my_filter->addmeasurement(delta_hat_pose);  
             // reset last_odom
             last_odom_meas_ = odom_meas_;
 
@@ -315,28 +295,12 @@ void Ekf_Node::spin(const ros::TimerEvent& e)
 
 }
 
-    // // check which sensors are still active
-    // if ((odom_active_ || odom_initializing_) && 
-    //     (Time::now() - odom_time_).toSec() > timeout_){
-    //   odom_active_ = false; odom_initializing_ = false;
-    //   ROS_INFO("Odom sensor not active any more");
-    // }
-    // if ((imu_active_ || imu_initializing_) && 
-    //     (Time::now() - imu_time_).toSec() > timeout_){
-    //   imu_active_ = false;  imu_initializing_ = false;
-    //   ROS_INFO("Imu sensor not active any more");
-    // }
-
-
-    // cout << "this is timer !!" << endl;
-
 // !!! IMPORTANT renmember to add time stamp here!!!!
 void Ekf_Node::add_pose_to_path(const Vector3d& meas, nav_msgs::Path& path) {
   path.header.seq += 1;
   // MODIFY!!!
   path.header.stamp = ros::Time::now();
-  //
-
+  
   geometry_msgs::PoseStamped p;
   p.header = path.header;
   p.pose.position.x = meas(0);

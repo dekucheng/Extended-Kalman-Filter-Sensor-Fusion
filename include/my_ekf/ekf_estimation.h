@@ -43,7 +43,7 @@ public:
     void Init_imu(const tf::StampedTransform& t);
     void Init_landmark(const tf::StampedTransform &t);
     bool check_time(const ros::Time& t);
-    void addmeasurement(const Matrix<double, 6, 1>& noise_odom);
+    void addmeasurement(const Vector3d& odom_diff);
     void addmeasurement(const double imu_meas);
     void addmeasurement(const vector<landmark_pose>& landmark_pose_set);
 
@@ -59,7 +59,7 @@ private:
     Vector3d state, prior;
     Matrix3d Cov, G, R;
     // odom meas matrices
-    Matrix3d H_odom, Q_odom, K_odom;
+    Matrix3d G_odom, R_odom;
     Vector3d odom_meas;
     // imu meas matrices
     Matrix<double, 1, 3> H_imu;
@@ -82,7 +82,7 @@ private:
     void getbasefromlandmarkmeas();
 
     void motion_update();
-    void update_with_odom();
+    void motion_update(const Vector3d& odom_diff);
     void update_with_imu();
     void update_with_landmark();
 }; // class

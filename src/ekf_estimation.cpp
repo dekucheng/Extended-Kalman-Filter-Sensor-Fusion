@@ -47,23 +47,28 @@ Ekf_Estimation::~Ekf_Estimation() {
 void Ekf_Estimation::motion_update() {
     prior = G * state + Vector3d(0.001, 0.001, 0.001);
     Cov = G * Cov * G.transpose() + R;
-}
 
-bool Ekf_Estimation::check_time(const ros::Time& t) {
-    double dt = (t - last_filter_time).toSec();
-    if(dt < 0.001) {
-        ROS_WARN("odom time is older than filter time skip this update!");
-        cout << "filter time is: " << last_filter_time.toSec() << "received odom time is :" << t.toSec() << endl;
-        return false;
-    } 
-    else {
-        // ready to update
-        last_filter_time = t;
-        return true;
+    for (int i=0; i < Cov.rows(); i++) {
+        for (int j=0; j<Cov.cols(); j++) {
+            if (Cov(i,j)>1000000) Cov(i,j)=1000000;
+            if (Cov(i,j)<-1000000) Cov(i,j)=-1000000;
+        }
     }
 }
-void Ekf_Estimation::addmeasurement(const Matrix<double, 6, 1>& noise_odom_){
-    odom_meas = noise_odom_.block<3,1>(0,0);
+
+void Ekf_Estimation::motion_update(const Vector3d& odom_diff) {
+    double rot1 = odom_diff(0), trans = odom_diff(1), rot2 = odom_diff(2);
+    prior(0) = state(0) + trans*cos(state(2)+rot1);
+    prior(1) = state(1) + trans*sin(state(2)+rot1);
+    prior(2) = state(2) + rot1 + rot2;
+    G_odom << 1, 0, -trans*sin(state(2)+rot1),
+              0, 1,  trans*cos(state(2)+rot1),
+              0, 0,                         1;
+    Cov = G_odom * Cov * G_odom.transpose() + R_odom;
+}
+
+void Ekf_Estimation::addmeasurement(const Vector3d& odom_diff){
+    odom_meas = odom_diff;
 }
 
 void Ekf_Estimation::addmeasurement(const double imu_meas_) {
@@ -79,11 +84,13 @@ bool Ekf_Estimation::update(const bool odom_update, const bool imu_update, const
     if (odom_update || imu_update || landmark_update) {
         // modify if use dt
         last_filter_time = this_update_time;
-        ROS_INFO("ekf ready to update!");
         // motion update
         motion_update();
         if (odom_update) {
-            update_with_odom();
+            motion_update(odom_meas);
+        }
+        else {
+            motion_update();
         }
         if (imu_update) {
             update_with_imu();
@@ -98,38 +105,6 @@ bool Ekf_Estimation::update(const bool odom_update, const bool imu_update, const
     else return false;
 }
 
-void Ekf_Estimation::update_with_odom() {
-
-    Vector3d h_u(prior(0), prior(1), prior(2));
-    K_odom = Cov*H_odom.transpose()*(H_odom*Cov*H_odom.transpose() + Q_odom).inverse();
-    prior = prior + K_odom*(odom_meas - h_u);
-    Cov = (Matrix3d::Identity() - K_odom*H_odom) * Cov;
-
-    if (IF_PRINT) {
-        cout << "Cov" << endl;
-        cout << Cov << endl;
-        cout << "H_odom" << endl;
-        cout << H_odom << endl;
-        cout << "h_u" << endl;
-        cout << h_u << endl;
-        cout << "odom_meas" << endl;
-        cout << odom_meas << endl;
-        cout << "inovation" << endl;
-        cout << odom_meas-h_u << endl;
-        cout << "Kalman Gain of odom is :" << endl;
-        cout << K_odom << endl;
-    
-        cout << "K_odom*Inovation" << endl;
-        cout << K_odom*(odom_meas - h_u) << endl;
-    }
-
-    for (int i=0; i < Cov.rows(); i++) {
-        for (int j=0; j<Cov.cols(); j++) {
-            if (Cov(i,j)>1000000) Cov(i,j)=1000000;
-            if (Cov(i,j)<-1000000) Cov(i,j)=-1000000;
-        }
-    }
-}
 
 void Ekf_Estimation::update_with_imu() {
 
@@ -147,13 +122,6 @@ void Ekf_Estimation::update_with_imu() {
         cout << K_imu << endl;
         cout << "before imu prior theta is:" << prior(2) << endl;
     }
-
-    for (int i=0; i < Cov.rows(); i++) {
-        for (int j=0; j<Cov.cols(); j++) {
-            if (Cov(i,j)>1000000) Cov(i,j)=1000000;
-            if (Cov(i,j)<-1000000) Cov(i,j)=-1000000;
-        }
-    }
 }
     // double dx = prior(1) - state(1), dy = prior(0) - state(0);
     // cout << "DEBUG!!!!  " << "dx" << dx << "dy" << dy << "0 0:" << -dy/(pow(dx, 2) + pow(dy, 2)) << " 0 1:" << dx/(pow(dx, 2) + pow(dy, 2)) << endl;
@@ -168,7 +136,7 @@ void Ekf_Estimation::update_with_landmark() {
         Vector3d h_u(prior(0), prior(1), prior(2));
         K_landmark = Cov*H_landmark.transpose()*(H_landmark*Cov*H_landmark.transpose() + Q_landmark).inverse();
         prior = prior + K_landmark*(landmark_meas[i].pose - h_u);
-        Cov = (Matrix3d::Identity() - K_odom*H_odom) * Cov;
+        Cov = (Matrix3d::Identity() - K_landmark*H_landmark) * Cov;
     }
     cout << " after fuse landmark detections the state is: " << endl;
     cout << prior << endl;
@@ -195,13 +163,10 @@ void Ekf_Estimation::Init(const Vector3d& first_odom, const ros::Time& first_tim
          0,       1000000, 0,
          0,       0,       1000000;
 
-    H_odom << 1, 0, 0,
-              0, 1, 0,
-              0, 0, 1;
 
-    Q_odom <<  0.01, 0, 0,
-               0,    0.01, 0,
-               0,    0,      100;
+    R_odom <<  0.05,  0,   0,
+               0,    0.05, 0,
+               0,    0,   0.8;
 
     H_imu << 0, 0, 1;
 
@@ -209,12 +174,12 @@ void Ekf_Estimation::Init(const Vector3d& first_odom, const ros::Time& first_tim
 
 
     H_landmark << 1, 0, 0,
-              0, 1, 0,
-              0, 0, 1;
+                  0, 1, 0,
+                  0, 0, 1;
 
-    Q_landmark <<  0.01, 0, 0,
-               0,    0.01, 0,
-               0,    0,      0.01;
+    Q_landmark <<  0.01, 0,      0,
+                   0,    0.01,   0,
+                   0,    0,      0.01;
 
     is_Initialized = true;
 
@@ -258,4 +223,3 @@ void Ekf_Estimation::getbasefromlandmarkmeas() {
         landmark_meas.push_back(bp);
     }
 }
-

@@ -6,7 +6,7 @@
     <arg name="y_pos" default="0.0"/>
     <arg name="z_pos" default="0.0"/>
 
-    <include file="$(find my_ekf)/launch/empty_world.launch">
+    <include file="$(find my_ekf)/launch/ekf_world.launch">
       <arg name="world_name" value="$(find my_ekf)/worlds/my_ekf.world"/>
       <arg name="paused" value="false"/>
       <arg name="use_sim_time" value="true"/>
