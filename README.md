@@ -57,18 +57,32 @@ IMU and landmark detections measure the yaw angle and (x, y, yaw) respectively. 
 ### Experimental Results
 The error of Euclidean distance (in meters) and the error of yaw (in radius) between estimated odometry and the true odometry are plotted in real time by using rqt_multiplot. For comparison, those errors between the odometry only updated by the motion model and the true odometry are also presented.
 
+#### Fuse Odometer, IMU and Landmark detections
 <p align = "center">
-  <img src = "files/lm_imu_xy.png" height = "600px">
+  <img src = "files/landmark_imu_xy.png" height = "600px">
 </p>
 <p align="center">
   <b>Fig 3(a). Euclidean distance error </b><br>
 </p>
 
 <p align = "center">
-  <img src = "files/lm_imu_yaw.png" height = "600px">
+  <img src = "files/landmark_imu_yaw.png" height = "600px">
 </p>
 <p align="center">
   <b>Fig 3(b). Yaw angle error </b><br>
 </p>
 
-For Fig3(b), ignore the peak value of green line because that results from the measurement is near Pi from positive side but the true value is close to -Pi from the negative side, while actually they are pretty close.
+#### Fuse Odometer and IMU
+<p align = "center">
+  <img src = "files/imu_xy.png" height = "600px">
+</p>
+<p align="center">
+  <b>Fig 4(a). Euclidean distance error </b><br>
+</p>
+
+<p align = "center">
+  <img src = "files/imu_yaw.png" height = "600px">
+</p>
+<p align="center">
+  <b>Fig 4(b). Yaw angle error </b><br>
+</p>
