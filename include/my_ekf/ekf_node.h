@@ -18,6 +18,8 @@
 #include "geometry_msgs/PoseStamped.h"
 #include "geometry_msgs/PoseWithCovarianceStamped.h"
 #include "nav_msgs/Path.h"
+#include "std_msgs/Float64.h"
+#include "my_ekf/ErPlot.h"
 
 // eigen3
 #include <eigen3/Eigen/Dense>
@@ -67,14 +69,14 @@ private:
 
 
   /// get the status of the filter
-//   bool getStatus(robot_pose_ekf::GetStatus::Request& req, robot_pose_ekf::GetStatus::Response& resp);
-
   ros::NodeHandle nh_;
   ros::NodeHandle private_nh_;
   ros::Timer timer_;
-  ros::Publisher pose_pub_, noise_odom_path_pub_, odom_path_pub_;
+  ros::Publisher pose_pub_, noise_odom_path_pub_, raw_odom_path_pub_, filtered_odom_path_pub_;
   ros::Subscriber odom_sub_, imu_sub_, landmark_sub_;
-
+  
+  // not necessary, error publishers
+  ros::Publisher filtered_odom_xy_error_pub_, filtered_odom_yaw_error_pub_,noise_odom_xy_error_pub_, noise_odom_yaw_error_pub_;
   // ekf filter
   shared_ptr<Ekf_Estimation>  my_filter;
   // tf listener
@@ -92,7 +94,7 @@ private:
   Matrix<double, 6, 1> odom_meas_;
   Matrix<double, 6, 1> last_odom_meas_;
   Matrix<double, 6, 1> noise_odom_;
-  nav_msgs::Path odom_path, noise_path;
+  nav_msgs::Path raw_odom_path, filtered_odom_path, noise_odom_path;
 
   // landmark measurements
   vector<landmark_pose> landmark_pose_set;

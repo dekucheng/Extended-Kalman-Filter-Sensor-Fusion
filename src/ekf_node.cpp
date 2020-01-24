@@ -20,14 +20,19 @@ Ekf_Node::Ekf_Node():
     private_nh_.param("imu_used", imu_used_, true);
     private_nh_.param("landmark_used", landmark_used_, true);
     private_nh_.param("base_footprint_frame", base_footprint_frame_, std::string("base_footprint"));
-    private_nh_.param("max_path_plot", max_path_plot, 10000);
+    private_nh_.param("max_path_plot", max_path_plot, 100000);
     private_nh_.param("camera_optical_frame", camera_optical_frame_,std::string("camera_rgb_optical_frame"));
 
     // publisher
     pose_pub_ = nh_.advertise<geometry_msgs::PoseWithCovarianceStamped>("odom_combined", 10);
-    odom_path_pub_ = nh_.advertise<nav_msgs::Path>("odom_path", 10);
+    raw_odom_path_pub_ = nh_.advertise<nav_msgs::Path>("raw_odom_path", 10);
     noise_odom_path_pub_ = nh_.advertise<nav_msgs::Path>("noise_odom_path", 10);
-
+    filtered_odom_path_pub_ = nh_.advertise<nav_msgs::Path>("filtered_odom_path", 10);
+    // error plot publisher
+    filtered_odom_xy_error_pub_ = nh_.advertise<my_ekf::ErPlot>("filtered_odom_xy_error", 10);
+    filtered_odom_yaw_error_pub_ = nh_.advertise<my_ekf::ErPlot>("filtered_odom_yaw_error", 10);
+    noise_odom_xy_error_pub_ = nh_.advertise<my_ekf::ErPlot>("noise_odom_xy_error", 10);
+    noise_odom_yaw_error_pub_ = nh_.advertise<my_ekf::ErPlot>("noise_odom_yaw_error", 10);
 
     // subscriber
     if (odom_used_) {
@@ -50,7 +55,6 @@ Ekf_Node::Ekf_Node():
 void Ekf_Node::odomCallback(const OdomConstPtr& msg) 
 {
     // cout << "odom received!" << endl;
-
     ROS_DEBUG("Odom callback at time %f ", ros::Time::now().toSec());
     assert(odom_used_);
 
@@ -203,6 +207,24 @@ void Ekf_Node::spin(const ros::TimerEvent& e)
     ROS_DEBUG("Spin function at time %f", ros::Time::now().toSec());
 
     filter_stamp_ = ros::Time::now();
+
+    // check which sensors are still active
+    if ((odom_active_ || odom_initializing_) && 
+        (Time::now() - odom_time_).toSec() > timeout_){
+      odom_active_ = false; odom_initializing_ = false;
+      ROS_INFO("Odom sensor not active any more");
+    }
+    if ((imu_active_ || imu_initializing_) && 
+        (Time::now() - imu_time_).toSec() > timeout_){
+      imu_active_ = false;  imu_initializing_ = false;
+      ROS_INFO("Imu sensor not active any more");
+    }
+    if ((landmark_active_ || landmark_initializing_) && 
+        (Time::now() - landmark_time_).toSec() > timeout_){
+      landmark_active_ = false;  landmark_initializing_ = false;
+      ROS_INFO("Landmark not active any more");
+    }
+
     if (my_filter->is_Initialized) {
       ros::Time this_update_time = filter_stamp_;
         // check if update odom
@@ -215,15 +237,6 @@ void Ekf_Node::spin(const ros::TimerEvent& e)
             delta_pose(2) = odom_meas_(2) - last_odom_meas_(2);
             // delta_hat_pose = (rot1, trans, rot2)
             delta_hat_pose = odom_diff_model_delta(old_pose, delta_pose);
-
-            // noise_odom_ = odom_meas_;
-            // // prepare the noise odom data (delta_hat_pose, dx, dy, dtheta)
-            // noise_odom_(0) = last_odom_meas_(0) + delta_hat_pose(1) * 
-            //         cos(last_odom_meas_(2) + delta_hat_pose(0));
-            // noise_odom_(1) = last_odom_meas_(1) + delta_hat_pose(1) * 
-            //         sin(last_odom_meas_(2) + delta_hat_pose(0));
-            // noise_odom_(2) = last_odom_meas_(2) + delta_hat_pose(0) + delta_hat_pose(2);
-
             // add measurement
             my_filter->addmeasurement(delta_hat_pose);  
             // reset last_odom
@@ -247,7 +260,6 @@ void Ekf_Node::spin(const ros::TimerEvent& e)
           ROS_INFO("imu data too old, not update with imu in this spin!");
         }
         // check if update landmark
-        // check if update imu 
         if (landmark_active_ && my_filter->landmark_Initialized && ((landmark_stamp_ = my_filter->last_filter_time).toSec() > 0.01)) {
           this_update_time = min(this_update_time, landmark_stamp_);  
           my_filter->addmeasurement(landmark_pose_set);
@@ -258,17 +270,40 @@ void Ekf_Node::spin(const ros::TimerEvent& e)
           ROS_INFO("landmark data too old, not update with landmark in this spin!");
         }
         if (my_filter -> update(odom_update_, imu_update_, landmark_update_, this_update_time)) {
-            add_pose_to_path(odom_meas_.block<3,1>(0,0), odom_path);
+            add_pose_to_path(odom_meas_.block<3,1>(0,0), raw_odom_path);
             Vector3d state = my_filter -> get_state();
-            add_pose_to_path(state, noise_path);
-            odom_path_pub_.publish(odom_path);
-            noise_odom_path_pub_.publish(noise_path);
+            add_pose_to_path(state, filtered_odom_path);
+            Vector3d noise_state = my_filter -> get_noise_state();
+            add_pose_to_path(noise_state, noise_odom_path);
+
+            raw_odom_path_pub_.publish(raw_odom_path);
+            filtered_odom_path_pub_.publish(filtered_odom_path);
+            noise_odom_path_pub_.publish(noise_odom_path);
+
+            // not necessary, calculate the error of filtered odom and noise odom
+            double dx, dy, dtheta;
+            my_ekf::ErPlot filtered_xy_err, filtered_yaw_err, noise_xy_err, noise_yaw_err;
+
+            filtered_xy_err.stamp = filtered_yaw_err.stamp = noise_xy_err.stamp = noise_yaw_err.stamp = raw_odom_path.header.stamp;
+            dx = odom_meas_(0) - noise_state(0);
+            dy = odom_meas_(1) - noise_state(1);
+            dtheta = odom_meas_(2) - noise_state(2);
+            noise_xy_err.data = sqrt(dx*dx + dy*dy);
+            noise_yaw_err.data = diff_angle(dtheta);
+            noise_odom_xy_error_pub_.publish(noise_xy_err);
+            noise_odom_yaw_error_pub_.publish(noise_yaw_err);
+
+            dx = odom_meas_(0) - state(0);
+            dy = odom_meas_(1) - state(1);
+            dtheta = odom_meas_(2) - state(2);
+            filtered_xy_err.data = sqrt(dx*dx + dy*dy);
+            filtered_yaw_err.data = diff_angle(dtheta);
+            filtered_odom_xy_error_pub_.publish(filtered_xy_err);
+            filtered_odom_yaw_error_pub_.publish(filtered_yaw_err);
             // print out error
-            double err = sqrt(pow(odom_meas_(0)-state(0), 2) +
-                              pow(odom_meas_(1)-state(1), 2) + 
-                              pow(odom_meas_(2)-state(2), 2));
-            cout << "<==============the error is: " << err << endl;
-            // cout << "true odom meas is: " << odom_meas_ << endl;
+            // double err = sqrt(pow(odom_meas_(0)-state(0), 2) +
+            //                   pow(odom_meas_(1)-state(1), 2) + 
+            //                   pow(odom_meas_(2)-state(2), 2));
         }
         else {
           ROS_INFO("EkF filter not update, skip this spin");
@@ -318,13 +353,15 @@ void Ekf_Node::add_pose_to_path(const Vector3d& meas, nav_msgs::Path& path) {
 
 
 void Ekf_Node::initialize_path() {
-  odom_path.header.seq = 0;
-  odom_path.header.stamp = odom_stamp_;
-  odom_path.header.frame_id = "odom";
+  raw_odom_path.header.seq = 0;
+  raw_odom_path.header.stamp = odom_stamp_;
+  raw_odom_path.header.frame_id = "odom";
 
-  noise_path.header = odom_path.header;
-  add_pose_to_path(odom_meas_.block<3,1>(0,0), odom_path);
-  add_pose_to_path(odom_meas_.block<3,1>(0,0), noise_path);
+  filtered_odom_path.header = noise_odom_path.header = raw_odom_path.header;
+  
+  add_pose_to_path(odom_meas_.block<3,1>(0,0), raw_odom_path);
+  add_pose_to_path(odom_meas_.block<3,1>(0,0), filtered_odom_path);
+  add_pose_to_path(odom_meas_.block<3,1>(0,0), noise_odom_path);
 }
 
 Ekf_Node::~Ekf_Node() {

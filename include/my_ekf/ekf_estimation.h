@@ -48,6 +48,7 @@ public:
     void addmeasurement(const vector<landmark_pose>& landmark_pose_set);
 
     Vector3d get_state() const;
+    Vector3d get_noise_state() const;
     bool update(const bool odom_update, const bool imu_update, const bool landmark_update, const ros::Time this_update_time);
     // destructor
     virtual ~Ekf_Estimation();
@@ -56,7 +57,7 @@ private:
     tf::TransformListener    robot_state;
 
     // filter member variables
-    Vector3d state, prior;
+    Vector3d state, prior, motion_model_state;
     Matrix3d Cov, G, R;
     // odom meas matrices
     Matrix3d G_odom, R_odom;

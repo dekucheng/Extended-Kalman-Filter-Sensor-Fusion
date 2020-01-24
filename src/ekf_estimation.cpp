@@ -58,9 +58,16 @@ void Ekf_Estimation::motion_update() {
 
 void Ekf_Estimation::motion_update(const Vector3d& odom_diff) {
     double rot1 = odom_diff(0), trans = odom_diff(1), rot2 = odom_diff(2);
+    // motion update for the prior which to be fused
     prior(0) = state(0) + trans*cos(state(2)+rot1);
     prior(1) = state(1) + trans*sin(state(2)+rot1);
     prior(2) = state(2) + rot1 + rot2;
+    // motion update for noise odom, which has no fusion data
+    motion_model_state(0) = motion_model_state(0) + trans*cos(motion_model_state(2)+rot1);
+    motion_model_state(1) = motion_model_state(1) + trans*sin(motion_model_state(2)+rot1);
+    motion_model_state(2) = motion_model_state(2) + rot1 + rot2;
+    motion_model_state(2) = normalize(motion_model_state(2));
+
     G_odom << 1, 0, -trans*sin(state(2)+rot1),
               0, 1,  trans*cos(state(2)+rot1),
               0, 0,                         1;
@@ -138,16 +145,20 @@ void Ekf_Estimation::update_with_landmark() {
         prior = prior + K_landmark*(landmark_meas[i].pose - h_u);
         Cov = (Matrix3d::Identity() - K_landmark*H_landmark) * Cov;
     }
-    cout << " after fuse landmark detections the state is: " << endl;
-    cout << prior << endl;
+    // cout << " after fuse landmark detections the state is: " << endl;
+    // cout << prior << endl;
 }
 
 Vector3d Ekf_Estimation::get_state() const {
     return state;
 }
 
+Vector3d Ekf_Estimation::get_noise_state() const {
+    return motion_model_state;
+}
+
 void Ekf_Estimation::Init(const Vector3d& first_odom, const ros::Time& first_time_stamp) {
-    state = first_odom;
+    state = motion_model_state = first_odom;
     last_filter_time = first_time_stamp;
 
     // Initialize filter matrices
@@ -170,7 +181,7 @@ void Ekf_Estimation::Init(const Vector3d& first_odom, const ros::Time& first_tim
 
     H_imu << 0, 0, 1;
 
-    Q_imu << 0.01;
+    Q_imu << 0.001;
 
 
     H_landmark << 1, 0, 0,
@@ -179,7 +190,7 @@ void Ekf_Estimation::Init(const Vector3d& first_odom, const ros::Time& first_tim
 
     Q_landmark <<  0.01, 0,      0,
                    0,    0.01,   0,
-                   0,    0,      0.01;
+                   0,    0,    0.1;
 
     is_Initialized = true;
 

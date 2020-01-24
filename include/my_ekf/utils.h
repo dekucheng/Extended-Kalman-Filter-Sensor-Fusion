@@ -36,6 +36,8 @@ double angle_diff(double a, double b);
 
 double ran_gaussian(double sigma);
 
+double diff_angle(const double a);
+
 Vector3d odom_diff_model_delta(Vector3d& old_pose, Vector3d& delta_pose);
 
 Affine3d create_rotation_matrix(double ax, double ay, double az);
