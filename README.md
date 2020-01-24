@@ -2,9 +2,9 @@
 ## Video Demo
 For both videos, please watch them at the highest res on Youtube.
 
-See the demo with odometer, imu and landmark detections [here](https://youtu.be/6gxRd_A1yz0).
+See the demo with Odometry, imu and landmark detections [here](https://youtu.be/6gxRd_A1yz0).
 
-See the demo only with odometer and imu [here](https://youtu.be/yEdiKWycDxo).
+See the demo only with Odometry and imu [here](https://youtu.be/yEdiKWycDxo).
 
 ## Set Up
 * Ubuntu 18.04
@@ -57,7 +57,7 @@ IMU and landmark detections measure the yaw angle and (x, y, yaw) respectively. 
 ### Experimental Results
 The error of Euclidean distance (in meters) and the error of yaw (in radius) between estimated odometry and the true odometry are plotted in real time by using rqt_multiplot. For comparison, those errors between the odometry only updated by the motion model and the true odometry are also presented.
 
-#### Fuse Odometer, IMU and Landmark detections
+#### Fuse Odometry, IMU and Landmark detections
 <p align = "center">
   <img src = "files/landmark_imu_xy.png" height = "600px">
 </p>
@@ -72,7 +72,7 @@ The error of Euclidean distance (in meters) and the error of yaw (in radius) bet
   <b>Fig 3(b). Yaw angle error </b><br>
 </p>
 
-#### Fuse Odometer and IMU
+#### Fuse Odometry and IMU
 <p align = "center">
   <img src = "files/imu_xy.png" height = "600px">
 </p>
