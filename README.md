@@ -1,5 +1,22 @@
 # Sensor Fusion by Extended Kalman Filter
 ## Video Demo
+### Rviz Visualization Explainations
+<p align = "center">
+  <img src = "files/rviz.png">
+</p>
+
+* The top left image is the raw image received from camera
+* The top right image is the image with apriltag detection result
+* The white line denotes the true path of the robot
+* The red line denotes the path generated only by motion model prediction
+* The green line denotes the path estimated by EKF
+* The marker of the frame axis denotes the configuration of currently detected tag
+
+<p align="center">
+  <b>Fig 1. Rviz Visualization</b><br>
+</p>
+
+
 For both videos, please watch them at the highest res on Youtube.
 
 See the demo with Odometry, imu and landmark detections [here](https://youtu.be/6gxRd_A1yz0).
@@ -13,7 +30,7 @@ See the demo only with Odometry and imu [here](https://youtu.be/yEdiKWycDxo).
 * Raspberry Pi RGB Camera (with res at 320 x 240)
 
 ## Dependency
-* [Apriltag_ros](http://wiki.ros.org/apriltag_ros)
+* [apriltag_ros](http://wiki.ros.org/apriltag_ros)
 * Gazebo Camera Plugin
 * Gazebo Imu Plugin
 * [rqt_multiplot](https://github.com/ANYbotics/rqt_multiplot_plugin) (optional)
@@ -35,7 +52,7 @@ Besides, since the data from all sensors are not synchronized, the time stamp of
   <img src = "files/hmm.png" height = "240px">
 </p>
 <p align="center">
-  <b>Fig 1. Hidden Markov Model </b><br>
+  <b>Fig 2. Hidden Markov Model </b><br>
 </p>
 
 As is known, the underlying model behind Kalman Filters is Hidden Markov Model. However, since in this project we have multiple unsynchronized sensor measurements, we need to do some tricks on state update rules. A customized pipeline is shown as below:
@@ -44,7 +61,7 @@ As is known, the underlying model behind Kalman Filters is Hidden Markov Model. 
   <img src = "files/pipeline.png" height = "600px">
 </p>
 <p align="center">
-  <b>Fig 2. Project Pipeline </b><br>
+  <b>Fig 3. Project Pipeline </b><br>
 </p>
 
 ### Motion Model and Measurement Models
@@ -62,14 +79,14 @@ The error of Euclidean distance (in meters) and the error of yaw (in radius) bet
   <img src = "files/landmark_imu_xy.png" height = "600px">
 </p>
 <p align="center">
-  <b>Fig 3(a). Euclidean distance error </b><br>
+  <b>Fig 4(a). Euclidean distance error </b><br>
 </p>
 
 <p align = "center">
   <img src = "files/landmark_imu_yaw.png" height = "600px">
 </p>
 <p align="center">
-  <b>Fig 3(b). Yaw angle error </b><br>
+  <b>Fig 4(b). Yaw angle error </b><br>
 </p>
 
 #### Fuse Odometry and IMU
@@ -77,12 +94,12 @@ The error of Euclidean distance (in meters) and the error of yaw (in radius) bet
   <img src = "files/imu_xy.png" height = "600px">
 </p>
 <p align="center">
-  <b>Fig 4(a). Euclidean distance error </b><br>
+  <b>Fig 5(a). Euclidean distance error </b><br>
 </p>
 
 <p align = "center">
   <img src = "files/imu_yaw.png" height = "600px">
 </p>
 <p align="center">
-  <b>Fig 4(b). Yaw angle error </b><br>
+  <b>Fig 5(b). Yaw angle error </b><br>
 </p>
