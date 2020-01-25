@@ -1,5 +1,11 @@
 # Sensor Fusion by Extended Kalman Filter
 ## Video Demo
+For both videos, please watch them at the highest res on Youtube.
+
+See the demo with Odometry, imu and landmark detections [here](https://youtu.be/6gxRd_A1yz0).
+
+See the demo only with Odometry and imu [here](https://youtu.be/yEdiKWycDxo).
+
 ### Rviz Visualization Explainations
 <p align = "center">
   <img src = "files/rviz.png">
@@ -10,18 +16,13 @@
 * The white line denotes the true path of the robot
 * The red line denotes the path generated only by motion model prediction
 * The green line denotes the path estimated by EKF
-* The marker of the frame axis denotes the configuration of currently detected tag
+* The frame axis marker with color (top right) denotes the configuration of currently detected tag
 
 <p align="center">
   <b>Fig 1. Rviz Visualization</b><br>
 </p>
 
 
-For both videos, please watch them at the highest res on Youtube.
-
-See the demo with Odometry, imu and landmark detections [here](https://youtu.be/6gxRd_A1yz0).
-
-See the demo only with Odometry and imu [here](https://youtu.be/yEdiKWycDxo).
 
 ## Set Up
 * Ubuntu 18.04
