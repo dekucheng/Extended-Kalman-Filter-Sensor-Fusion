@@ -1,4 +1,4 @@
-# Sensor Fusion by Extended Kalman Filter
+# Extended Kalman Filter Sensor Fusion
 ## Video Demo
 For both videos, please watch them at the highest res on Youtube.
 
@@ -21,8 +21,6 @@ See the demo only with Odometry and imu [here](https://youtu.be/yEdiKWycDxo).
 <p align="center">
   <b>Fig 1. Rviz Visualization</b><br>
 </p>
-
-
 
 ## Set Up
 * Ubuntu 18.04
@@ -65,12 +63,60 @@ As is known, the underlying model behind Kalman Filters is Hidden Markov Model. 
   <b>Fig 3. Project Pipeline </b><br>
 </p>
 
+
+
 ### Motion Model and Measurement Models
+#### Motion Model
 Since this project is implemented in an ideal environment, the raw odometry is extremely accurate. For easy implementation and visualization, we consider the raw odometry as the gound truth.
 
-**Sample motion model odometry** (from Probabilistic Robotics P110) is used for motion model prediction. The difference (dx, dy, dyaw) between two raw odometry measurements is used to generate the required (rot1, translation, rot2) data with some extra manually added noise.
+<p align = "center">
+  <img src = "files/motion_model.png">
+</p>
+<p align="center">
+  <b>Fig 4. Motion Model </b><br>
+</p>
 
+**Sample motion model odometry** (from Probabilistic Robotics P110) is used as motion model. As is explained in Probabilistic Robotics, using velocity in motion model prediction suffers from the mismatch between the actual motion controllers and its crude mathematical model, so alternatively, it is better to use odometry measurements as basis for calculating the robot's motion over time.
+
+The difference (dx, dy, dyaw) between two raw odometry measurements is decomposed into (rot1, translation, rot2), which is then applied to the estimated state **X<sub>t-1</sub>** from the last time stamp to generate a prior. Thus the jacobian matrix of state space function **g(x<sub>t-1</sub>,u<sub>t</sub>)** is:
+
+<p align = "left">
+  <img src = "files/G_matrix.png" height = "150">
+</p>
+
+#### Measurement Models
 IMU and landmark detections measure the yaw angle and (x, y, yaw) respectively. Since they measure the state directly, they are considered as linear measurement models.
+
+For IMU, since we use odometry measurement as motion model, the measured linear accelerations and augular velocities won't be used. In such case we only consider using its measurement of orientation. Thus the jacoian matrix of measurement function is just a constant: 1.
+
+For Landmark detections, the [apriltag_ros](http://wiki.ros.org/apriltag_ros) package keeps boardcasting the poses of currently detected tags (relative to the **camera frame**).
+
+<p align = "left">
+  <img src = "files/landmark_model.png" >
+</p>
+<p align="center">
+  <b>Fig 5. Landmark Measurement Model </b><br>
+</p>
+
+For each detected landmark/tag, we can derive the pose of the robot **foot print frame** from:
+<p align = "left">
+  <img src = "files/transformation.png" height = "60">
+</p>
+
+Where **i** denotes the id of the tag, **T<sub>sb</sub>** denotes the pose of foot_print_frame in world frame, **T<sub>st</sub>** denotes the tag pose in world frame, **T<sub>ct</sub>** is the measurement of the tag pose, **T<sub>cb</sub>** denotes the pose of foot_print_frame in cmera camera frame. As **T<sub>st</sub>** and **T<sub>cb</sub>** are known, we can calculate the measured robot state **(x<sub>i</sub>, y<sub>i</sub> ,yaw<sub>i</sub>)** with currently measurement **T<sub>ct,i</sub>**. In this case, since the measurement function is linear, the jacobian matrix **H** is a 3x3 diagonal matrix.
+
+With all tag detactions, the filter is updated as follows:
+<p align = "left">
+  <img src = "files/landmark_update.png" height = "200">
+</p>
+
+Where **i** denotes the tag id, **K<sub>t,i</sub>** denotes the Kalman Gain, **Q<sub>t,i</sub>** denotes the covariance matrix of measurement, **h** denotes the measurement function.
+
+This is a little different from the EKF algorithm in Probabilistic Robotics because we want to keep updating the prior in each iteration and then use them as the input for the next iteration. This happens in **sensor fusion**, where we treat the posterior, which is updated by the current sensor measurement, as the prior of the next sensor measurement's update. After all the updates, we finally get the estimated posterior:
+
+<p align = "left">
+  <img src = "files/posterior.png" height = "80px">
+</p>
 
 ### Experimental Results
 The error of Euclidean distance (in meters) and the error of yaw (in radius) between estimated odometry and the true odometry are plotted in real time by using rqt_multiplot. For comparison, those errors between the odometry only updated by the motion model and the true odometry are also presented.
@@ -80,14 +126,14 @@ The error of Euclidean distance (in meters) and the error of yaw (in radius) bet
   <img src = "files/landmark_imu_xy.png" height = "600px">
 </p>
 <p align="center">
-  <b>Fig 4(a). Euclidean distance error </b><br>
+  <b>Fig 6(a). Euclidean distance error </b><br>
 </p>
 
 <p align = "center">
   <img src = "files/landmark_imu_yaw.png" height = "600px">
 </p>
 <p align="center">
-  <b>Fig 4(b). Yaw angle error </b><br>
+  <b>Fig 6(b). Yaw angle error </b><br>
 </p>
 
 #### Fuse Odometry and IMU
@@ -95,12 +141,14 @@ The error of Euclidean distance (in meters) and the error of yaw (in radius) bet
   <img src = "files/imu_xy.png" height = "600px">
 </p>
 <p align="center">
-  <b>Fig 5(a). Euclidean distance error </b><br>
+  <b>Fig 7(a). Euclidean distance error </b><br>
 </p>
 
 <p align = "center">
   <img src = "files/imu_yaw.png" height = "600px">
 </p>
 <p align="center">
-  <b>Fig 5(b). Yaw angle error </b><br>
+  <b>Fig 7(b). Yaw angle error </b><br>
 </p>
+
+From the result, we can observe that the odometry which purely based on motion model is quite noisy. With IMU measurement, the yaw angle measurement becomes accurate, which in the meanwhile also improves the accuracy of (x, y). Finally, with landmark detections, all the tracked state variables become accurate. From Fig 6(a), the Euclidean error of (x,y) fluctuates because the measurement of landmark detections runs at a lower frequency than the filter spin. Once the detections available, the error diminishes.
