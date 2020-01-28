@@ -79,7 +79,7 @@ Since this project is implemented in an ideal environment, the raw odometry is e
 
 **Sample motion model odometry** (from Probabilistic Robotics P110) is used as motion model. As is explained in Probabilistic Robotics, using velocity in motion model prediction suffers from the mismatch between the actual motion controllers and its crude mathematical model, so alternatively, it is better to use odometry measurements as basis for calculating the robot's motion over time.
 
-The difference (dx, dy, dyaw) between two raw odometry measurements is decomposed into (rot1, translation, rot2), which is then applied to the estimated state **X<sub>t-1</sub>** from the last time stamp to generate a prior. Thus the jacobian matrix of state space function **g(x<sub>t-1</sub>,u<sub>t</sub>)** is:
+The difference (dx, dy, dyaw) between two raw odometry measurements is decomposed into (rot1, translation, rot2), which is then applied to the estimated state **X<sub>t-1</sub>** from the last time stamp to generate a prior. Thus the jacobian matrix **G** of state space function **g(x<sub>t-1</sub>,u<sub>t</sub>)** is:
 
 <p align = "left">
   <img src = "files/G_matrix.png" height = "150">
